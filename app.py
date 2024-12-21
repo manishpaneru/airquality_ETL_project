@@ -5,19 +5,20 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-# Set page config
+# I configured the page layout to be wide and added a globe icon to match our air quality theme
 st.set_page_config(
     page_title="Air Quality Live Analysis",
     page_icon="🌍",
     layout="wide"
 )
 
-# Title and author
+# I added a title and my name as the creator to establish ownership and professionalism
 st.title("🌍 Air Quality Live Analysis")
 st.markdown("Created by Manish Paneru")
 st.markdown("---")
 
-# Function to load data from SQLite
+# I created this function to efficiently load and cache our data from SQLite
+# This way, we don't have to reload the data every time the user interacts with the app
 @st.cache_data
 def load_data():
     conn = sqlite3.connect('air.db')
@@ -25,22 +26,23 @@ def load_data():
     conn.close()
     return df
 
-# Load the data
+# Load the data once when the app starts
 df = load_data()
 
-# Sidebar filters
+# I added these filters in the sidebar to make the app interactive and user-friendly
 st.sidebar.header("Filters")
 countries = sorted(df['location'].unique())
 selected_country = st.sidebar.selectbox("Select Location", countries)
 
-# 1. Bar Chart: Top Polluted Locations
+# Section 1: I created this bar chart to visualize the most polluted locations
 st.header("1. Top Polluted Locations")
 top_n = st.slider("Select number of locations to show", 5, 20, 10)
 
-# Calculate average PM2.5 by location
+# I calculated average PM2.5 values for each location to show overall pollution levels
 avg_pm25 = df.groupby('location')['pm25_value'].mean().sort_values(ascending=False).head(top_n)
 
-# Create color coding based on PM2.5 levels
+# I used color coding to make it easy to identify dangerous pollution levels:
+# Green for safe, Yellow for moderate, Red for dangerous
 colors = ['green' if x < 50 else 'yellow' if x < 100 else 'red' for x in avg_pm25.values]
 
 fig_bar = px.bar(
@@ -52,25 +54,25 @@ fig_bar = px.bar(
 fig_bar.update_traces(marker_color=colors)
 st.plotly_chart(fig_bar, use_container_width=True)
 
-# 2. Geographic Map using Plotly
+# Section 2: I implemented this interactive map to show the geographic distribution of pollution
 st.header("2. PM2.5 Distribution Map")
 pm25_threshold = st.slider("PM2.5 Threshold (µg/m³)", 0, 200, 50)
 
-# Filter data based on threshold
+# I filtered the data based on user-selected threshold for better visualization
 map_data = df[df['pm25_value'] >= pm25_threshold].copy()
 
-# Create color conditions
+# I used the same color scheme as the bar chart for consistency
 map_data['color'] = map_data['pm25_value'].apply(
     lambda x: 'green' if x < 50 else 'yellow' if x < 100 else 'red'
 )
 
-# Create the scatter mapbox
+# I chose a clean map style and added hover data for better user interaction
 fig_map = px.scatter_mapbox(
     map_data,
     lat='latitude',
     lon='longitude',
     color='pm25_value',
-    size=np.ones(len(map_data)) * 10,  # Uniform size
+    size=np.ones(len(map_data)) * 10,
     hover_data=['location', 'pm25_value'],
     color_continuous_scale=['green', 'yellow', 'red'],
     zoom=1,
@@ -85,7 +87,7 @@ fig_map.update_layout(
 
 st.plotly_chart(fig_map, use_container_width=True)
 
-# 3. Ranked Table
+# Section 3: I created this ranked table with gradient colors to show detailed measurements
 st.header("3. Air Quality Rankings")
 st.dataframe(
     df[['location', 'pm25_value', 'datetime_utc']]
@@ -94,7 +96,7 @@ st.dataframe(
     height=400
 )
 
-# 4. Summary Statistics
+# Section 4: I added these summary statistics to give users a quick overview
 st.header("4. Summary Statistics")
 col1, col2, col3 = st.columns(3)
 
@@ -105,7 +107,7 @@ with col2:
 with col3:
     st.metric("Average PM2.5", f"{df['pm25_value'].mean():.2f} µg/m³")
 
-# 5. Gauge Chart for Selected Location
+# Section 5: I designed this gauge chart to show real-time PM2.5 levels for selected locations
 st.header("5. PM2.5 Gauge for Selected Location")
 selected_location_data = df[df['location'] == selected_country]['pm25_value'].mean()
 
@@ -130,7 +132,7 @@ fig_gauge = go.Figure(go.Indicator(
 ))
 st.plotly_chart(fig_gauge, use_container_width=True)
 
-# 6. Alerts Section
+# Section 6: I implemented this alert system to highlight dangerous pollution levels
 st.header("6. Air Quality Alerts")
 critical_locations = df[df['pm25_value'] > 100][['location', 'pm25_value', 'datetime_utc']].drop_duplicates()
 

@@ -6,37 +6,39 @@ import os
 
 def fetch_air_quality_data():
     """
-    Fetch air quality data from OpenAQ API
+    I created this function to fetch real-time air quality data from the OpenAQ API.
+    I'm using their v2 API endpoint with authentication to get the most recent measurements.
     """
-    # API endpoint and key for OpenAQ
+    # I'm using my OpenAQ API key for authenticated access to their service
     API_URL = "https://api.openaq.org/v2/measurements"
     API_KEY = "3380c40ee807e917c4ecaad9219ca9c2c3b198ec5b5228eba1dce39960a3ab63"
     
-    # Request headers with API Key
+    # I included the API key in the headers for authentication
     headers = {
         "X-API-Key": API_KEY
     }
     
-    # Parameters for the API request
+    # I set these parameters to get today's data, limited to 1000 records for manageability
     params = {
-        "limit": 1000,  # Number of records to fetch
+        "limit": 1000,
         "page": 1,
-        "date_from": (datetime.now()).strftime("%Y-%m-%d"),  # Get today's data
+        "date_from": (datetime.now()).strftime("%Y-%m-%d"),
         "order_by": "datetime"
     }
     
     try:
-        # Make the API request with headers
+        # I make the API request here with proper error handling
         response = requests.get(API_URL, headers=headers, params=params)
         
-        # Check if request was successful
+        # I check if the request was successful before proceeding
         if response.status_code == 200:
-            # Extract data from the JSON response
+            # I extract the results from the JSON response
             data = response.json()["results"]
             
-            # Convert to DataFrame
+            # I convert the data to a pandas DataFrame for easier manipulation
             air = pd.DataFrame(data)
             
+            # I print these previews to help with debugging and verification
             print("\nDataFrame Preview before transformation:")
             print(air.head())
             print("\nColumns in the raw dataset:")
@@ -55,40 +57,41 @@ def fetch_air_quality_data():
 
 def transform(df):
     """
-    Clean and transform the air quality data
+    I created this function to clean and transform the raw air quality data.
+    I'm focusing on PM2.5 measurements and ensuring the data is in a consistent format.
     """
     try:
-        # Create a copy of the dataframe to avoid modifying the original
+        # I work with a copy to preserve the original data
         cleaned_df = df.copy()
         
-        # Drop unnecessary columns
+        # I remove columns we don't need for our analysis
         columns_to_drop = ['city', 'isAnalysis', 'isMobile', 'entity', 'sensorType']
         cleaned_df = cleaned_df.drop(columns=[col for col in columns_to_drop if col in cleaned_df.columns])
         
-        # Filter for PM2.5 measurements only
+        # I filter for PM2.5 measurements since that's our focus
         cleaned_df = cleaned_df[cleaned_df['parameter'] == 'pm25']
         
-        # Handle nested data
-        # Extract coordinates
+        # I handle the nested coordinate data by extracting latitude and longitude
         if 'coordinates' in cleaned_df.columns:
             cleaned_df['latitude'] = cleaned_df['coordinates'].apply(lambda x: x.get('latitude') if isinstance(x, dict) else None)
             cleaned_df['longitude'] = cleaned_df['coordinates'].apply(lambda x: x.get('longitude') if isinstance(x, dict) else None)
             cleaned_df = cleaned_df.drop('coordinates', axis=1)
         
-        # Convert date to datetime if it exists
+        # I convert the timestamps to a standardized format
         if 'date' in cleaned_df.columns:
             cleaned_df['datetime_utc'] = pd.to_datetime(cleaned_df['date'].apply(lambda x: x.get('utc') if isinstance(x, dict) else x))
             cleaned_df = cleaned_df.drop('date', axis=1)
         
-        # Remove invalid measurements
+        # I remove invalid measurements (negative values don't make sense for PM2.5)
         cleaned_df = cleaned_df[cleaned_df['value'] > 0]
         
-        # Rename value column
+        # I rename the value column to be more specific
         cleaned_df = cleaned_df.rename(columns={'value': 'pm25_value'})
         
-        # Select and reorder columns to match the database schema
+        # I select and reorder columns to match our database schema
         cleaned_df = cleaned_df[['location', 'parameter', 'pm25_value', 'unit', 'latitude', 'longitude', 'datetime_utc']]
         
+        # I print these previews to verify the transformation
         print("\nDataFrame Preview after transformation:")
         print(cleaned_df.head())
         print("\nColumns in the cleaned dataset:")
@@ -102,22 +105,23 @@ def transform(df):
 
 def load_to_sqlite(df):
     """
-    Load the transformed data into SQLite database
+    I created this function to store our cleaned data in a SQLite database.
+    I'm using SQLite because it's lightweight and perfect for our needs.
     """
     try:
-        # Specify the database path
+        # I specify the database path in the current directory
         db_path = 'air.db'
         
-        # Remove existing database if it exists
+        # I remove any existing database to start fresh
         if os.path.exists(db_path):
             os.remove(db_path)
             print(f"Removed existing database at {db_path}")
         
-        # Connect to SQLite database
+        # I create a new connection to the database
         print(f"Creating new database at {db_path}")
         conn = sqlite3.connect(db_path)
         
-        # Create the quality table
+        # I create the table with appropriate columns for our data
         conn.execute("""
             CREATE TABLE IF NOT EXISTS quality (
                 location TEXT,
@@ -130,37 +134,35 @@ def load_to_sqlite(df):
             )
         """)
         
-        # Load the DataFrame into the quality table
+        # I load the data into our table, replacing any existing data
         df.to_sql('quality', conn, if_exists='replace', index=False)
         
-        # Get the number of rows in the table
+        # I verify the data was loaded correctly
         row_count = conn.execute("SELECT COUNT(*) FROM quality").fetchone()[0]
         print(f"\nSuccessfully loaded {row_count} records into the quality table")
         
-        # Show a preview of the data in the table
+        # I show a preview of the loaded data for verification
         print("\nPreview of data in SQLite:")
         preview_df = pd.read_sql_query("SELECT * FROM quality LIMIT 5", conn)
         print(preview_df)
         
-        # Close the connection
+        # I make sure to close the connection properly
         conn.close()
         print(f"\nDatabase connection closed. Database saved at {db_path}")
         
     except Exception as e:
         print(f"An error occurred while loading to SQLite: {str(e)}")
         print(f"Error details: {str(e)}")
-        # If connection exists, close it
+        # I ensure the connection is closed even if an error occurs
         if 'conn' in locals():
             conn.close()
 
 if __name__ == "__main__":
-    # Extract
+    # I run the ETL process in sequence
     raw_data = fetch_air_quality_data()
     
-    # Transform
     if raw_data is not None:
         cleaned_data = transform(raw_data)
         
-        # Load
         if cleaned_data is not None:
             load_to_sqlite(cleaned_data)
