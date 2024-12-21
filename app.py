@@ -132,17 +132,63 @@ fig_gauge = go.Figure(go.Indicator(
 ))
 st.plotly_chart(fig_gauge, use_container_width=True)
 
-# Section 6: I implemented this alert system to highlight dangerous pollution levels
+# Section 6: I implemented this detailed alert system with multiple trigger levels
 st.header("6. Air Quality Alerts")
-critical_locations = df[df['pm25_value'] > 100][['location', 'pm25_value', 'datetime_utc']].drop_duplicates()
+
+# I defined these PM2.5 trigger levels based on standard air quality guidelines
+def get_air_quality_status(pm25_value):
+    if pm25_value <= 12:
+        return "Good", "Air quality is satisfactory, and air pollution poses little or no risk.", "✅"
+    elif pm25_value <= 35.4:
+        return "Moderate", "Air quality is acceptable; however, some pollutants may cause moderate health concerns for a very small number of people.", "⚠️"
+    elif pm25_value <= 55.4:
+        return "Unhealthy for Sensitive Groups", "Members of sensitive groups may experience health effects, but the general public is less likely to be affected.", "⚠️"
+    elif pm25_value <= 150.4:
+        return "Unhealthy", "Everyone may begin to experience health effects; members of sensitive groups may experience more serious health effects.", "🚨"
+    elif pm25_value <= 250.4:
+        return "Very Unhealthy", "Health warnings of emergency conditions. The entire population is more likely to be affected.", "🚨"
+    else:
+        return "Hazardous", "Health alert: everyone may experience more serious health effects.", "☠️"
+
+# I get the current PM2.5 value for the selected location
+current_location_data = df[df['location'] == selected_country]['pm25_value'].mean()
+status, description, icon = get_air_quality_status(current_location_data)
+
+# I create an expander to show the general PM2.5 trigger levels
+with st.expander("ℹ️ PM2.5 Trigger Levels Information", expanded=True):
+    st.markdown("""
+    | Level | PM2.5 Range (µg/m³) | Health Implications |
+    |-------|---------------------|-------------------|
+    | Good | 0 - 12 | Air quality is satisfactory |
+    | Moderate | 12.1 - 35.4 | Acceptable air quality |
+    | Unhealthy for Sensitive Groups | 35.5 - 55.4 | May affect sensitive individuals |
+    | Unhealthy | 55.5 - 150.4 | Everyone may experience effects |
+    | Very Unhealthy | 150.5 - 250.4 | Emergency health effects |
+    | Hazardous | > 250.4 | Serious health alert |
+    """)
+
+# I display the current alert status for the selected location
+st.subheader(f"Current Alert Status for {selected_country}")
+alert_color = "green" if status == "Good" else "orange" if status in ["Moderate", "Unhealthy for Sensitive Groups"] else "red"
+st.markdown(f"<div style='padding: 20px; border-radius: 10px; background-color: {alert_color}; color: white;'>"
+           f"<h3 style='margin:0'>{icon} Current Status: {status}</h3>"
+           f"<p style='margin:10px 0 0 0'>PM2.5 Level: {current_location_data:.1f} µg/m³</p>"
+           f"<p style='margin:10px 0 0 0'>{description}</p>"
+           "</div>", unsafe_allow_html=True)
+
+# I show critical alerts for all locations
+st.subheader("Critical Alerts Across All Locations")
+critical_locations = df[df['pm25_value'] > 55.4][['location', 'pm25_value', 'datetime_utc']].drop_duplicates()
 
 if not critical_locations.empty:
-    st.error("⚠️ Critical PM2.5 Levels Detected!")
     for _, row in critical_locations.iterrows():
+        status, description, icon = get_air_quality_status(row['pm25_value'])
         st.warning(
-            f"Location: {row['location']}\n"
-            f"PM2.5 Level: {row['pm25_value']:.2f} µg/m³\n"
-            f"Time: {row['datetime_utc']}"
+            f"{icon} Location: {row['location']}\n"
+            f"Status: {status}\n"
+            f"PM2.5 Level: {row['pm25_value']:.1f} µg/m³\n"
+            f"Time: {row['datetime_utc']}\n"
+            f"Advisory: {description}"
         )
 else:
     st.success("✅ No critical PM2.5 levels detected in any location") 
